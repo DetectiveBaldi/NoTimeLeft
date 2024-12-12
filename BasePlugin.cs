@@ -3,13 +3,10 @@ using HarmonyLib;
 using MTM101BaldAPI.Registers;
 using MTM101BaldAPI;
 using BepInEx.Configuration;
-using MTM101BaldAPI.SaveSystem;
-using System.IO;
-using System.Linq;
 
 namespace NoTimeLeft
 {
-    [BepInPlugin("detectivebaldi.pluspacks.notimeleft", "No Time Left Pack", "1.1.0.0")]
+    [BepInPlugin("detectivebaldi.pluspacks.notimeleft", "No Time Left Pack", "1.2.0.0")]
     [BepInDependency("mtm101.rulerp.bbplus.baldidevapi")]
     public class BasePlugin : BaseUnityPlugin
     {
@@ -17,7 +14,7 @@ namespace NoTimeLeft
 
         public static BasePlugin Current;
 
-        public ConfigEntry<bool> EraseTimeLimit;
+        public ConfigEntry<float> ManualTimeLimit;
 
 #pragma warning restore CS8618
 
@@ -29,57 +26,19 @@ namespace NoTimeLeft
 
             Harmony.PatchAllConditionals();
 
+            ManualTimeLimit = Config.Bind<float>("General", "Manual Time Limit", 0.0f, "The amount of time allocated to beat the level before the Lights Out event begins, in seconds. If set to -1.0, the default times are used.");
+
             GeneratorManagement.Register(this, GenerationModType.Addend, GenerateCallback);
-
-            EraseTimeLimit = Config.Bind<bool>("General", "Erase Time Limit", true, "If enabled, the school timer will be set to 0:00 once Baldi finishes counting.");
-
-            ModdedSaveGame.AddSaveHandler(new NoTimeLimitSave());
         }
 
         public void GenerateCallback(string LName, int LNumber, SceneObject LSceneObject)
         {
-            if (EraseTimeLimit.Value)
+            if (ManualTimeLimit.Value != -1.0f && LName.StartsWith("F"))
             {
-                LSceneObject.levelObject.timeLimit = 0.0f;
+                LSceneObject.levelObject.timeLimit = ManualTimeLimit.Value;
 
                 LSceneObject.MarkAsNeverUnload();
             }
-        }
-    }
-
-    public class NoTimeLimitSave : ModdedSaveGameIOBinary
-    {
-        public override PluginInfo pluginInfo => BasePlugin.Current.Info;
-
-        public override void Load(BinaryReader Reader)
-        {
-            Reader.ReadByte();
-        }
-
-        public override void Reset()
-        {
-
-        }
-
-        public override void Save(BinaryWriter Writer)
-        {
-            Writer.Write((byte)0);
-        }
-
-        public override string[] GenerateTags()
-        {
-            if (BasePlugin.Current.EraseTimeLimit.Value)
-                return new string[1] {"EraseTimeLimit"};
-
-            return new string[0];
-        }
-
-        public override string DisplayTags(string[] tags)
-        {
-            if (tags.Contains("EraseTimeLimit"))
-                return "Erase Time Limit";
-
-            return "Keep Time Limit";
         }
     }
 }
