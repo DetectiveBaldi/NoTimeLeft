@@ -1,12 +1,14 @@
 ﻿using BepInEx;
 using HarmonyLib;
-using MTM101BaldAPI.Registers;
 using MTM101BaldAPI;
-using BepInEx.Configuration;
+using MTM101BaldAPI.OptionsAPI;
+using MTM101BaldAPI.Registers;
+using System.Collections.Generic;
+using UnityEngine;
 
 namespace NoTimeLeft
 {
-    [BepInPlugin("detectivebaldi.pluspacks.notimeleft", "No Time Left Pack", "1.2.0.0")]
+    [BepInPlugin("detectivebaldi.pluspacks.notimeleft", "No Time Left Pack", "1.2.0.1")]
     [BepInDependency("mtm101.rulerp.bbplus.baldidevapi")]
     public class BasePlugin : BaseUnityPlugin
     {
@@ -14,7 +16,11 @@ namespace NoTimeLeft
 
         public static BasePlugin Current;
 
-        public ConfigEntry<float> ManualTimeLimit;
+        public int CustomTimeLimit;
+
+        public bool UseCustomTimeLimit;
+
+        public Dictionary<SceneObject, float> DefaultTimeLimits;
 
 #pragma warning restore CS8618
 
@@ -26,16 +32,36 @@ namespace NoTimeLeft
 
             Harmony.PatchAllConditionals();
 
-            ManualTimeLimit = Config.Bind<float>("General", "Manual Time Limit", 0.0f, "The amount of time allocated to beat the level before the Lights Out event begins, in seconds. If set to -1.0, the default times are used.");
+            if (PlayerPrefs.GetInt("NoTimeLeft$Init", 0) == 0)
+            {
+                PlayerPrefs.SetInt("NoTimeLeft$Init", 1);
 
-            GeneratorManagement.Register(this, GenerationModType.Addend, GenerateCallback);
+                PlayerPrefs.SetInt("CustomTimeLimit", 0);
+
+                PlayerPrefs.SetInt("UseCustomTimeLimit", 1);
+
+                PlayerPrefs.Save();
+            }
+
+            CustomTimeLimit = PlayerPrefs.GetInt("CustomTimeLimit");
+
+            UseCustomTimeLimit = PlayerPrefs.GetInt("UseCustomTimeLimit") == 1.0f;
+
+            DefaultTimeLimits = new Dictionary<SceneObject, float>();
+
+            CustomOptionsCore.OnMenuInitialize += (OptionsMenu optionsMenu, CustomOptionsHandler customOptionsHandler) => customOptionsHandler.AddCategory<NoTimeLeftOptions>("NoTimeLeft\nOptions");
+
+            GeneratorManagement.Register(this, GenerationModType.Finalizer, GenerateCallback);
         }
 
         public void GenerateCallback(string LName, int LNumber, SceneObject LSceneObject)
         {
-            if (ManualTimeLimit.Value != -1.0f && LName.StartsWith("F"))
+            if (LName.StartsWith("F"))
             {
-                LSceneObject.levelObject.timeLimit = ManualTimeLimit.Value;
+                if (!DefaultTimeLimits.ContainsKey(LSceneObject))
+                    DefaultTimeLimits[LSceneObject] = LSceneObject.levelObject.timeLimit;
+
+                LSceneObject.levelObject.timeLimit = UseCustomTimeLimit ? CustomTimeLimit * 60.0f : DefaultTimeLimits[LSceneObject];
 
                 LSceneObject.MarkAsNeverUnload();
             }
