@@ -1,69 +1,72 @@
 ﻿using BepInEx;
 using HarmonyLib;
-using MTM101BaldAPI;
 using MTM101BaldAPI.OptionsAPI;
 using MTM101BaldAPI.Registers;
+using MTM101BaldAPI;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace NoTimeLeft
 {
-    [BepInPlugin("detectivebaldi.pluspacks.notimeleft", "No Time Left Pack", "1.2.0.1")]
+    [BepInPlugin("detectivebaldi.pluspacks.notimeleft", "No Time Left Pack", "1.2.0.2")]
     [BepInDependency("mtm101.rulerp.bbplus.baldidevapi")]
     public class BasePlugin : BaseUnityPlugin
     {
-#pragma warning disable CS8618
+        public static BasePlugin current;
 
-        public static BasePlugin Current;
+        public int customTimeLimit;
 
-        public int CustomTimeLimit;
+        public bool useCustomTimeLimit;
 
-        public bool UseCustomTimeLimit;
-
-        public Dictionary<SceneObject, float> DefaultTimeLimits;
-
-#pragma warning restore CS8618
+        public Dictionary<SceneObject, float> defaultTimeLimits;
 
         public void Awake()
         {
-            Current = this;
+            current = this;
 
-            Harmony Harmony = new Harmony("detectivebaldi.pluspacks.notimeleft");
+            Harmony harmony = new("detectivebaldi.pluspacks.notimeleft");
 
-            Harmony.PatchAllConditionals();
+            harmony.PatchAllConditionals();
 
-            if (PlayerPrefs.GetInt("NoTimeLeft$Init", 0) == 0)
+            if (PlayerPrefs.GetInt("noTimeLeft$Init", 0) == 0)
             {
-                PlayerPrefs.SetInt("NoTimeLeft$Init", 1);
+                PlayerPrefs.SetInt("noTimeLeft$Init", 1);
 
-                PlayerPrefs.SetInt("CustomTimeLimit", 0);
+                PlayerPrefs.SetInt("customTimeLimit", 0);
 
-                PlayerPrefs.SetInt("UseCustomTimeLimit", 1);
+                PlayerPrefs.SetInt("useCustomTimeLimit", 1);
 
                 PlayerPrefs.Save();
             }
 
-            CustomTimeLimit = PlayerPrefs.GetInt("CustomTimeLimit");
+            customTimeLimit = PlayerPrefs.GetInt("customTimeLimit");
 
-            UseCustomTimeLimit = PlayerPrefs.GetInt("UseCustomTimeLimit") == 1.0f;
+            useCustomTimeLimit = PlayerPrefs.GetInt("useCustomTimeLimit") == 1.0f;
 
-            DefaultTimeLimits = new Dictionary<SceneObject, float>();
+            defaultTimeLimits = [];
 
             CustomOptionsCore.OnMenuInitialize += (OptionsMenu optionsMenu, CustomOptionsHandler customOptionsHandler) => customOptionsHandler.AddCategory<NoTimeLeftOptions>("NoTimeLeft\nOptions");
 
             GeneratorManagement.Register(this, GenerationModType.Finalizer, GenerateCallback);
         }
 
-        public void GenerateCallback(string LName, int LNumber, SceneObject LSceneObject)
+        public void GenerateCallback(string name, int index, SceneObject sceneObject)
         {
-            if (LName.StartsWith("F"))
+            CustomLevelObject[] levelObjects = sceneObject.GetCustomLevelObjects();
+
+            sceneObject.MarkAsNeverUnload();
+
+            for (int i = 0; i < levelObjects.Length; i++)
             {
-                if (!DefaultTimeLimits.ContainsKey(LSceneObject))
-                    DefaultTimeLimits[LSceneObject] = LSceneObject.levelObject.timeLimit;
+                if (!name.StartsWith("F"))
+                    continue;
 
-                LSceneObject.levelObject.timeLimit = UseCustomTimeLimit ? CustomTimeLimit * 60.0f : DefaultTimeLimits[LSceneObject];
+                CustomLevelObject levelObject = levelObjects[i];
 
-                LSceneObject.MarkAsNeverUnload();
+                if (!defaultTimeLimits.ContainsKey(sceneObject))
+                    defaultTimeLimits[sceneObject] = levelObject.timeLimit;
+
+                levelObject.timeLimit = useCustomTimeLimit ? customTimeLimit * 60.0f : defaultTimeLimits[sceneObject];
             }
         }
     }
